@@ -23,7 +23,7 @@ class MLX90640:
         self.ROM = self.getROM()
         print("Complete, downloading RAM...\n")
         self.updateRAM()
-        self.setControlReg1(rate=framerate, pattern=0)
+        self.setControlReg1(rate=framerate, pattern=pattern)
         # self.setFramerate(framerate) #MLX Framerate values 0-7 are 0.5-64Hz
         self.gain = self.getGain()  # Restore GAIN coefficient
 
@@ -54,8 +54,21 @@ class MLX90640:
         self.updateRAM()
         floatarray = [[self.getCompensatedPixDataRAM(
             i+1, j+1) for i in range(24)] for j in range(32)]
+        
+        invalids = self.getInvalidPixels()
+        if len(invalids) > 0:
+            print(invalids)
         return floatarray
 
+    def getInvalidPixels(self):
+        # go from ROM[40->808]
+        invalids = []
+        for i in range(768):
+            pixel_data = self.ROM[0x40 + i]
+            if pixel_data == 0 or pixel_data & 1 == 1:
+                invalids.append(i)
+        return invalids
+    
     def getControlReg1(self):
         return self.getRegf(0x800D)
 
@@ -288,8 +301,8 @@ class MLX90640:
         KtaAvMask = 0xFF00 >> (8*rowEven)
 
         KtaRC = (self.ROM[KtaAvAddr] & KtaAvMask) >> 8 * rowOdd
-        if KtaRC > 127:
-            KtaRC = KtaAvRC - 256
+        #if KtaRC > 127:
+            #KtaRC = KtaAvRC - 256
 
         KtaScale1 = ((self.ROM[0x38] & 0x00F0) >> 4)+8
         KtaScale2 = (self.ROM[0x38] & 0x000F)

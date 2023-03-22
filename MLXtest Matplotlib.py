@@ -5,19 +5,20 @@
 # pyserial
 # matplotlib
 
-
-from matplotlib.animation import FuncAnimation
+# conda install -c conda-forge ffmpeg
+from matplotlib.animation import FuncAnimation, FFMpegWriter
 import numpy as np
 import matplotlib.pyplot as plt
 from MLX90640 import MLX90640
-from celluloid import Camera
-
-# conda install -c conda-forge ffmpeg
-
+import time
+import datetime
 import matplotlib
-matplotlib.use('Tkagg')
 
-plt.rcParams['animation.ffmpeg_path'] = '"D:\Downloads\ffmpeg-master-latest-win64-gpl\ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe"'
+is_recording = False
+video_start_time = 0
+frames = []
+clims = []
+
 # MLX Framerate values 0-7 are 0.5-64Hz
 # 0 = 0.5Hz
 # 1 = 1Hz
@@ -28,68 +29,99 @@ plt.rcParams['animation.ffmpeg_path'] = '"D:\Downloads\ffmpeg-master-latest-win6
 # 6 = 32Hz
 # 7 = 64Hz
 # Actual com port name will depend on system
-sensor = MLX90640(port="COM5", baud=115200, framerate=3, pattern=1)
-fps = 10
-nSeconds = 5
+ir_framerate = 4
 
-# fig, ax = plt.subplots()
-# plt.inferno()
+def on_key_press(event, fig, im, sensor):
+    global is_recording, frames, clims, video_start_time, ir_framerate
+    if event.key == 'c':
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"img_{timestamp}.png"
+        print("Saved image as: " + filename)
+        plt.savefig(filename)
+    elif event.key == 'v':
+        if ~is_recording:
+            print("Starting recording")
+            frames = []
+            clims = []
+            video_start_time = time.time()
+        else:
+            video_elapsed_time = time.time() - video_start_time
+            fps = len(frames) / video_elapsed_time
+            print("Stopping recording")
+            # Set up the file writer
+            writer = FFMpegWriter(fps=15)
 
-# floatarray = [[sensor.getCompensatedPixDataRAM(
-#     i+1, j+1) for i in range(24)] for j in range(32)]
-# im = ax.imshow(floatarray)  # Show the image
-# ax.set_title("Temperature Map")
-# cb = fig.colorbar(im, ax=ax)  # Show a colorbar
-
-
-loop = 0
-
-
-fig, ax = plt.subplots()
-
-plt.inferno()
-im = plt.imshow(sensor.getImage(), origin='lower')
-ax.set_title("Temperature Map")
-cb = fig.colorbar(im, ax=ax)  # Show a colorbar
-camera = Camera(fig)
-
-
-
-def animate(n):
-    print(n)
+            def update(frame):
+                # Update the data for the image plot
+                i = frame - 1
+                im.set_data(frames[i])
+                im.set_clim(clims[i][0], clims[i][1])
+            
+                # Return the image object so that it gets updated
+                return im,
+            
+            # Create the animation from the saved frames and axis limits
+            ani = FuncAnimation(fig, update, frames=len(frames), interval=1000/fps)            
+            
+            # Save the animation to a file
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            filename = f"vid_{timestamp}.mp4"
+            print("Saved video as: " + filename)
+            ani.save(filename, writer=writer)
+        is_recording = ~is_recording
+    elif event.key == 'j':
+        if ir_framerate > 0:
+            ir_framerate -= 1
+            sensor.setFramerate(ir_framerate)
+            print("Set framerate: " + str(ir_framerate))
+    elif event.key == 'k':
+        if ir_framerate < 7:
+            ir_framerate += 1
+            im.set_data(sensor.getImage()) # Fix a bug with the plot axis not updating
+            sensor.setFramerate(ir_framerate)
+            print("Set framerate: " + str(ir_framerate))
+        
+def show(sensor, calib_interval):
+    fig, ax = plt.subplots()
+    plt.inferno()
+    im = plt.imshow(sensor.getImage(), origin='lower')
     ax.set_title("Temperature Map")
-    data = sensor.getImage()
-    im.set_data(data)
-    im.set_clim(np.min(data), np.max(data))
-    return [im]
+    fig.colorbar(im, ax=ax)  # Show a colorbar
+    fig.canvas.mpl_connect('key_press_event', lambda event: on_key_press(event, fig, im, sensor))
     
-
-def video():
-    anim = FuncAnimation(fig, animate, interval=1000 / fps)
-    plt.show()
-    f = r"animate_func.gif"
-    anim.save(f, fps=fps)
-    #writergif = PillowWriter(fps=fps)
-    #anim.save(f, writer=writergif)
-    sensor.close()
+    prev_calib = 0
+    data = sensor.getImage()
+    curr_clim = [np.min(data), np.max(data)]
+    while True:
+        try:
+            data = sensor.getImage()
+            im.set_data(data)
+            if time.time() - prev_calib > calib_interval:
+                prev_calib = time.time()
+                curr_clim = [np.min(data), np.max(data)]
+                im.set_clim(curr_clim[0], curr_clim[1])
+                print("Recalibrating")
+            plt.show()
+            if is_recording:
+                frames.append(data)
+                clims.append(curr_clim)
+            plt.pause(0.01)
+        except:
+            break
     plt.close()
 
 
-def normal():
+def main():
+    matplotlib.use('Tkagg')
+    # Setup the sensor
+    sensor = MLX90640(port="COM5", baud=115200, framerate=ir_framerate, pattern=1)
+    show(sensor, calib_interval=5)
+    sensor.close()
+    print("Done")
+
+if __name__ == "__main__":
     try:
-        while True:
-            # Calculate temperature values from MLX RAM
-            floatarray = [[sensor.getCompensatedPixDataRAM(
-                i+1, j+1) for i in range(24)] for j in range(32)]
-            cmap = ax.imshow(floatarray)  # Show the image
-            ax.set_title("Temperature Map")
-            cb = fig.colorbar(cmap, ax=ax)  # Show a colorbar
-            plt.pause(0.001)
-            sensor.updateRAM()  # get copy new of RAM from MLX90640
-            cb.remove()  # remove old plots
-            ax.cla()
-    finally:
-        sensor.close()
+        main()
+    except:
+      pass
 
-
-video()

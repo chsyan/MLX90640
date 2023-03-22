@@ -64,8 +64,6 @@ ORDERED_OBJS += \
 "./driverlib/MSP430F5xx_6xx/usci_b_i2c.obj" \
 "./driverlib/MSP430F5xx_6xx/usci_b_spi.obj" \
 "./driverlib/MSP430F5xx_6xx/wdt_a.obj" \
-"../lnk_msp430f5529.cmd" \
-"../USB_API/msp430USB.cmd" \
 "../USB_API/msp430USB.ld" \
 $(GEN_CMDS__FLAG) \
 -llibmath.a \
@@ -207,11 +205,11 @@ BIN_OUTPUTS__QUOTED += \
 
 
 # All Target
-all: $(OBJS) $(CMD_SRCS) $(LD_SRCS) $(GEN_CMDS)
+all: $(OBJS) $(LD_SRCS) $(GEN_CMDS)
 	@$(MAKE) --no-print-directory -Onone "I2C to USB.out" secondary-outputs
 
 # Tool invocations
-I2C\ to\ USB.out: $(OBJS) $(CMD_SRCS) $(LD_SRCS) $(GEN_CMDS)
+I2C\ to\ USB.out: $(OBJS) $(LD_SRCS) $(GEN_CMDS)
 	@echo 'Building target: "$@"'
 	@echo 'Invoking: MSP430 Linker'
 	"C:/ti/ccs1220/ccs/tools/compiler/ti-cgt-msp430_21.6.1.LTS/bin/cl430" -vmspx --data_model=restricted -Ooff --use_hw_mpy=F5 --advice:power="all" --define=__MSP430F5529__ -g --printf_support=minimal --diag_warning=225 --diag_wrap=off --display_error_number --silicon_errata=CPU21 --silicon_errata=CPU22 --silicon_errata=CPU23 --silicon_errata=CPU40 -z -m"I2C to USB.map" --heap_size=320 --stack_size=320 --cinit_hold_wdt=on -i"C:/ti/ccs1220/ccs/ccs_base/msp430/include" -i"C:/ti/ccs1220/ccs/ccs_base/msp430/lib/5xx_6xx_FRxx" -i"C:/ti/ccs1220/ccs/tools/compiler/ti-cgt-msp430_21.6.1.LTS/lib" -i"C:/ti/ccs1220/ccs/tools/compiler/ti-cgt-msp430_21.6.1.LTS/include" --reread_libs --diag_wrap=off --display_error_number --warn_sections --xml_link_info="I2C to USB_linkInfo.xml" --use_hw_mpy=F5 --rom_model -o "I2C to USB.out" $(ORDERED_OBJS)

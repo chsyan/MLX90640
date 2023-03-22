@@ -52,8 +52,6 @@
 "./driverlib/MSP430F5xx_6xx/usci_b_i2c.obj"
 "./driverlib/MSP430F5xx_6xx/usci_b_spi.obj"
 "./driverlib/MSP430F5xx_6xx/wdt_a.obj"
-"../lnk_msp430f5529.cmd"
-"../USB_API/msp430USB.cmd"
 "../USB_API/msp430USB.ld"
 -llibmath.a
 -llibc.a
