@@ -18,7 +18,7 @@ import cv2    #run in anaconda command mode 'pip install opencv-python'
 #5 = 16Hz
 #6 = 32Hz
 #7 = 64Hz
-sensor = MLX90640("COM5", baud=115200, framerate=5, pattern=0)#Actual com port name will depend on system
+sensor = MLX90640("COM5", baud=115200, framerate=2, pattern=1)#Actual com port name will depend on system
 
 loop = 0
 cv2.namedWindow("img", cv2.WINDOW_NORMAL)

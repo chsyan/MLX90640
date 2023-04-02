@@ -29,7 +29,7 @@ clims = []
 # 6 = 32Hz
 # 7 = 64Hz
 # Actual com port name will depend on system
-ir_framerate = 4
+ir_framerate = 1
 
 def on_key_press(event, fig, im, sensor):
     global is_recording, frames, clims, video_start_time, ir_framerate
@@ -114,7 +114,7 @@ def show(sensor, calib_interval):
 def main():
     matplotlib.use('Tkagg')
     # Setup the sensor
-    sensor = MLX90640(port="COM5", baud=115200, framerate=ir_framerate, pattern=1)
+    sensor = MLX90640(port="COM5", baud=115200, framerate=ir_framerate, pattern=0)
     show(sensor, calib_interval=5)
     sensor.close()
     print("Done")

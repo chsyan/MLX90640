@@ -47,6 +47,11 @@ class MLX90640:
         self.alphaCorrR3 = 1 + self.KsTo2*(self.CT3-0)
         self.alphaCorrR4 = self.alphaCorrR3*(1+self.KsTo3*(self.CT4-self.CT3))
 
+
+        self.is_il = 1
+        if pattern == 1:
+            self.is_il = 0
+
     def close(self):
         self.bus.close()
 
@@ -63,7 +68,7 @@ class MLX90640:
     def getInvalidPixels(self):
         # go from ROM[40->808]
         invalids = []
-        for i in range(768):
+        for i in range(32*24):
             pixel_data = self.ROM[0x40 + i]
             if pixel_data == 0 or pixel_data & 1 == 1:
                 invalids.append(i)
