@@ -107,6 +107,7 @@ def show(sensor, calib_interval):
                 clims.append(curr_clim)
             plt.pause(0.01)
         except:
+            print("Exception in show")
             break
     plt.close()
 
@@ -122,6 +123,5 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except:
-      pass
-
+    except Exception as e:
+        print(e)

@@ -47,6 +47,10 @@ class MLX90640:
         self.alphaCorrR3 = 1 + self.KsTo2*(self.CT3-0)
         self.alphaCorrR4 = self.alphaCorrR3*(1+self.KsTo3*(self.CT4-self.CT3))
 
+        self.is_il = 1
+        if pattern == 1:
+            self.is_il = 0
+
     def close(self):
         self.bus.close()
 
@@ -54,7 +58,7 @@ class MLX90640:
         self.updateRAM()
         floatarray = [[self.getCompensatedPixDataRAM(
             i+1, j+1) for i in range(24)] for j in range(32)]
-        
+
         invalids = self.getInvalidPixels()
         if len(invalids) > 0:
             print(invalids)
@@ -63,12 +67,12 @@ class MLX90640:
     def getInvalidPixels(self):
         # go from ROM[40->808]
         invalids = []
-        for i in range(768):
+        for i in range(32*48):
             pixel_data = self.ROM[0x40 + i]
             if pixel_data == 0 or pixel_data & 1 == 1:
                 invalids.append(i)
         return invalids
-    
+
     def getControlReg1(self):
         return self.getRegf(0x800D)
 
@@ -301,8 +305,8 @@ class MLX90640:
         KtaAvMask = 0xFF00 >> (8*rowEven)
 
         KtaRC = (self.ROM[KtaAvAddr] & KtaAvMask) >> 8 * rowOdd
-        #if KtaRC > 127:
-            #KtaRC = KtaAvRC - 256
+        # if KtaRC > 127:
+        #KtaRC = KtaAvRC - 256
 
         KtaScale1 = ((self.ROM[0x38] & 0x00F0) >> 4)+8
         KtaScale2 = (self.ROM[0x38] & 0x000F)
@@ -326,6 +330,30 @@ class MLX90640:
         pixGain = RAM*self.gain
         pixOs = pixGain - pixOffset * \
             (1+Kta*(self.Ta - self.Ta0)*(1+Kv*(self.VDD - self.VDD0)))
+
+        # Extra offset term for interleaved
+        if self.is_il:
+            # il_chess_c1_ee = self.ROM[0x35] & 0x003F
+            # if il_chess_c1_ee > 31:
+            #     il_chess_c1_ee -= 64
+            # il_chess_c1 = il_chess_c1_ee / 16
+
+            il_chess_c2_ee = (self.ROM[0x35] & 0x07C0) / 64
+            if il_chess_c2_ee > 15:
+                il_chess_c2_ee -= 32
+            il_chess_c2 = il_chess_c2_ee / 2
+
+            il_chess_c3_ee = (self.ROM[0x35] & 0xF800) / 2048
+            if il_chess_c3_ee > 15:
+                il_chess_c3_ee -= 32
+            il_chess_c3 = il_chess_c3_ee / 8
+
+            pixel_number = (i-1)*32 + j
+            il_pattern = int((pixel_number - 1) / 32) - (int(int((pixel_number - 1) / 32) / 2) * 2)
+            conversion_pattern = (int((pixel_number - 3) / 4) - int((pixel_number - 2) / 4) 
+                                  + int(pixel_number / 4) - int((pixel_number - 1) / 4)) * (1 - (2 * il_pattern))
+            
+            pixOs += (il_chess_c3 * ((2 * il_pattern) - 1)) - (il_chess_c2 * conversion_pattern)
         return pixOs
 
     def getCompensatedPixDataRAM(self, i, j):
@@ -352,6 +380,12 @@ class MLX90640:
             OffCPSP1d = OffCPSP1d-64
 
         OffCPSP1 = OffCPSP1d + OffCPSP0
+        if self.is_il:
+            il_chess_c1_ee = self.ROM[0x35] & 0x003F
+            if il_chess_c1_ee > 31:
+                il_chess_c1_ee -= 64
+            il_chess_c1 = il_chess_c1_ee / 16
+            OffCPSP1 += il_chess_c1
 
         KvtaCPEEVal = self.ROM[0x3B]
         KvtaScaleVal = self.ROM[0x38]
