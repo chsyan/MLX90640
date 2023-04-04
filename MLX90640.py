@@ -23,6 +23,11 @@ class MLX90640:
         self.ROM = self.getROM()
         print("Complete, downloading RAM...\n")
         self.updateRAM()
+        
+        # Constants
+        self.INTERLEAVED_PATTERN = 0
+        self.CHESS_PATTERN = 1
+        self.pattern = pattern
         self.setControlReg1(rate=framerate, pattern=pattern)
         # self.setFramerate(framerate) #MLX Framerate values 0-7 are 0.5-64Hz
         self.gain = self.getGain()  # Restore GAIN coefficient
@@ -34,7 +39,7 @@ class MLX90640:
         self.Ta = self.getTa()  # Calculate ambient temp
         self.emissivity = 1  # Emissivity constant
         self.TGC = self.getTGC()  # Restore TGC coefficient
-        self.chessNotIL = 1  # Default display update mode is chess, not interleaved
+        
         self.KsTa = self.getKsTa()  # Restore KsTa coefficient
         # Restore KsTo coefficient
         self.KsTo1, self.KsTo2, self.KsTo3, self.KsTo4 = self.getKsTo()
@@ -46,11 +51,6 @@ class MLX90640:
         self.alphaCorrR2 = 1
         self.alphaCorrR3 = 1 + self.KsTo2*(self.CT3-0)
         self.alphaCorrR4 = self.alphaCorrR3*(1+self.KsTo3*(self.CT4-self.CT3))
-
-
-        self.is_il = 1
-        if pattern == 1:
-            self.is_il = 0
 
     def close(self):
         self.bus.close()
@@ -104,8 +104,9 @@ class MLX90640:
         packet.append((num >> 8) & 0xff)  # Number of bytes to read
         packet.append(num & 0xff)
         packet.extend(map(ord, 'rdg'))  # Escape sequence at the end
-
-        written = self.bus.write(packet)
+        
+        self.bus.write(packet)
+        # written = self.bus.write(packet)
         # print(written)
         s = bytearray(self.bus.read(num + 4))  # 4 Extra characters for 'DONE'
         if(len(s) != (num + 4)):
@@ -212,12 +213,19 @@ class MLX90640:
     def pixnum(self, i, j):
         return (i-1)*32 + j
 
-    def patternChess(self, i, j):
-        pixnum = self.pixnum(i, j)
-        a = (pixnum-1)/32
-        b = int((pixnum-1)/32)/2
-        return int(a) - int(b)*2
+    def xor(self, a, b):
+        return bool(a) != bool(b)
 
+    def patternChess(self, i, j):
+        pix_num = self.pixnum(i, j)
+        a = int((pix_num - 1) / 32) - int(int((pix_num - 1) / 32) / 2) * 2
+        b = pix_num - 1 - int((pix_num - 1) / 2) * 2
+        return self.xor(a, b)
+    
+    def patternInterleaved(self, i, j):
+        pix_num = self.pixnum(i, j)
+        return int((pix_num - 1) / 32) - int(int((pix_num - 1) / 32) / 2) * 2
+    
     def getKsTa(self):
 
         KsTaEE = (self.ROM[0x3C] & 0xFF00) >> 256
@@ -274,8 +282,9 @@ class MLX90640:
         colAdd = 0x18 + int(((j-1)/4))
         rowMask = 0xF << int((4*((i-1) % 4)))
         colMask = 0xF << int((4*((j-1) % 4)))
-
-        OffsetPixAdd = 0x3F+((i-1)*32)+j
+        
+        pix_num = self.pixnum(i, j)
+        OffsetPixAdd = 0x3F + pix_num
         OffsetPixVal = self.ROM[OffsetPixAdd]
         OffsetPix = (OffsetPixVal & 0xFC00)/1024
         if OffsetPix > 31:
@@ -331,6 +340,21 @@ class MLX90640:
         pixGain = RAM*self.gain
         pixOs = pixGain - pixOffset * \
             (1+Kta*(self.Ta - self.Ta0)*(1+Kv*(self.VDD - self.VDD0)))
+            
+        if self.pattern == self.INTERLEAVED_PATTERN:            
+            il_chess_c2 = (self.ROM[0x35] & 0x07C0) / 64
+            if il_chess_c2 > 15:
+                il_chess_c2 -= 32
+            il_chess_c2 /= 2
+            
+            il_chess_c3 = (self.ROM[0x35] & 0xF800) / 2048
+            if il_chess_c3 > 15:
+                il_chess_c3 -= 32
+            il_chess_c3 /= 8
+            
+            il_pattern = int((pix_num - 1) / 32) - int(int((pix_num - 1) / 32) / 2) * 2
+            conversion_pattern = (int((pix_num - 3) / 4) - int((pix_num - 2) / 4) + int(pix_num / 4) - int((pix_num - 1) / 4)) * (1 - 2 * il_pattern)
+            pixOs += il_chess_c2 * ((2 * il_pattern - 1) - conversion_pattern)
         return pixOs
 
     def getCompensatedPixDataRAM(self, i, j):
@@ -357,6 +381,13 @@ class MLX90640:
             OffCPSP1d = OffCPSP1d-64
 
         OffCPSP1 = OffCPSP1d + OffCPSP0
+        
+        if self.pattern == self.INTERLEAVED_PATTERN:
+            il_chess_c1 = self.ROM[0x35] & 0x003F
+            if il_chess_c1 > 31:
+                il_chess_c1 -= 64
+            il_chess_c1 /= 16
+            OffCPSP1 += il_chess_c1
 
         KvtaCPEEVal = self.ROM[0x3B]
         KvtaScaleVal = self.ROM[0x38]
@@ -377,10 +408,10 @@ class MLX90640:
         pixOSCPSP0 = pixGainCPSP0 - OffCPSP0*b
         pixOSCPSP1 = pixGainCPSP1 - OffCPSP1*b
 
-        if self.chessNotIL:
+        if self.pattern == self.CHESS_PATTERN:
             pattern = self.patternChess(i, j)
         else:
-            pattern = self.patternChess(i, j)
+            pattern = self.patternInterleaved(i, j)
 
         VIREmcomp = pixOs/self.emissivity
         VIRcomp = VIREmcomp - self.TGC * \

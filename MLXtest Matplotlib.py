@@ -14,6 +14,12 @@ import time
 import datetime
 import matplotlib
 
+# Constants
+INTERLEAVED_PATTERN = 0
+CHESS_PATTERN = 1
+FRAMERATE_MIN = 0
+FRAMERATE_MAX = 7
+
 # Settings
 # MLX Framerate values 0-7 are 0.5-64Hz
 # 0 = 0.5Hz
@@ -26,15 +32,13 @@ import matplotlib
 # 7 = 64Hz
 ir_framerate = 2
 com_port = "COM5" # Actual com port name will depend on system
-pattern = 1 # 1 = chess (default optimized), 0 = interleaved
+pattern = INTERLEAVED_PATTERN # 1 = chess (default optimized), 0 = interleaved
 
 # State vars
 is_recording = False
 video_start_time = 0
 frames = []
 clims = []
-
-
 
 def on_key_press(event, fig, im, sensor):
     global is_recording, frames, clims, video_start_time, ir_framerate
@@ -45,16 +49,17 @@ def on_key_press(event, fig, im, sensor):
         plt.savefig(filename)
     elif event.key == 'v' or event.key == 'r':
         if ~is_recording:
-            print("Starting recording")
             frames = []
             clims = []
             video_start_time = time.time()
+            print("Start recording")
         else:
-            video_elapsed_time = time.time() - video_start_time
+            curr_time = time.time()
+            video_elapsed_time = curr_time - video_start_time
             fps = len(frames) / video_elapsed_time
-            print("Stopping recording")
+            print("Stop recording")
             # Set up the file writer
-            writer = FFMpegWriter(fps=15)
+            writer = FFMpegWriter(fps=fps)
 
             def update(frame):
                 # Update the data for the image plot
@@ -71,15 +76,15 @@ def on_key_press(event, fig, im, sensor):
             # Save the animation to a file
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             filename = f"vid_{timestamp}.mp4"
-            print("Saved video as: " + filename)
             ani.save(filename, writer=writer)
+            print("Saved video as: " + filename)
         is_recording = ~is_recording
-    elif event.key == 'j':
+    elif event.key == 'h':
         if ir_framerate > 0:
             ir_framerate -= 1
             sensor.setFramerate(ir_framerate)
             print("Set framerate: " + str(ir_framerate))
-    elif event.key == 'k':
+    elif event.key == 'l':
         if ir_framerate < 7:
             ir_framerate += 1
             im.set_data(sensor.getImage()) # Fix a bug with the plot axis not updating
@@ -119,6 +124,7 @@ def show(sensor, calib_interval):
 def main():
     matplotlib.use('Tkagg')
     # Setup the sensor
+    print((5-2) * 3 + 10)
     sensor = MLX90640(port=com_port, framerate=ir_framerate, pattern=pattern)
     show(sensor, calib_interval=5)
     sensor.close()
