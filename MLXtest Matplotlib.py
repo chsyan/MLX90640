@@ -14,11 +14,7 @@ import time
 import datetime
 import matplotlib
 
-is_recording = False
-video_start_time = 0
-frames = []
-clims = []
-
+# Settings
 # MLX Framerate values 0-7 are 0.5-64Hz
 # 0 = 0.5Hz
 # 1 = 1Hz
@@ -28,17 +24,26 @@ clims = []
 # 5 = 16Hz
 # 6 = 32Hz
 # 7 = 64Hz
-# Actual com port name will depend on system
-ir_framerate = 1
+ir_framerate = 2
+com_port = "COM5" # Actual com port name will depend on system
+pattern = 1 # 1 = chess (default optimized), 0 = interleaved
+
+# State vars
+is_recording = False
+video_start_time = 0
+frames = []
+clims = []
+
+
 
 def on_key_press(event, fig, im, sensor):
     global is_recording, frames, clims, video_start_time, ir_framerate
-    if event.key == 'c':
+    if event.key == 'i' or event.key == 'c':
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"img_{timestamp}.png"
         print("Saved image as: " + filename)
         plt.savefig(filename)
-    elif event.key == 'v':
+    elif event.key == 'v' or event.key == 'r':
         if ~is_recording:
             print("Starting recording")
             frames = []
@@ -114,7 +119,7 @@ def show(sensor, calib_interval):
 def main():
     matplotlib.use('Tkagg')
     # Setup the sensor
-    sensor = MLX90640(port="COM5", baud=115200, framerate=ir_framerate, pattern=0)
+    sensor = MLX90640(port=com_port, framerate=ir_framerate, pattern=pattern)
     show(sensor, calib_interval=5)
     sensor.close()
     print("Done")
