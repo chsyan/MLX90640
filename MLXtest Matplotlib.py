@@ -30,24 +30,27 @@ FRAMERATE_MAX = 7
 # 5 = 16Hz
 # 6 = 32Hz
 # 7 = 64Hz
-ir_framerate = 2
+ir_framerate = 4
 com_port = "COM5" # Actual com port name will depend on system
-pattern = INTERLEAVED_PATTERN # 1 = chess (default optimized), 0 = interleaved
+pattern = CHESS_PATTERN # 1 = chess (default optimized), 0 = interleaved
+calibration_interval = 10 # How long in seconds between each calibration of temperature range
+auto_calibrate = 1 # Whether to auto calibrate on calibration interval or not
 
 # State vars
 is_recording = False
 video_start_time = 0
 frames = []
 clims = []
+prev_calib_time = 0
 
 def on_key_press(event, fig, im, sensor):
-    global is_recording, frames, clims, video_start_time, ir_framerate
-    if event.key == 'i' or event.key == 'c':
+    global is_recording, frames, clims, video_start_time, ir_framerate, prev_calib_time
+    if event.key == 'i':
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"img_{timestamp}.png"
         print("Saved image as: " + filename)
         plt.savefig(filename)
-    elif event.key == 'v' or event.key == 'r':
+    elif event.key == 'v':
         if ~is_recording:
             frames = []
             clims = []
@@ -57,7 +60,7 @@ def on_key_press(event, fig, im, sensor):
             curr_time = time.time()
             video_elapsed_time = curr_time - video_start_time
             fps = len(frames) / video_elapsed_time
-            print("Stop recording")
+            print("Stop recording. Saving video...")
             # Set up the file writer
             writer = FFMpegWriter(fps=fps)
 
@@ -90,8 +93,10 @@ def on_key_press(event, fig, im, sensor):
             im.set_data(sensor.getImage()) # Fix a bug with the plot axis not updating
             sensor.setFramerate(ir_framerate)
             print("Set framerate: " + str(ir_framerate))
+    elif event.key == 'r' or event.key == 'c':
+        prev_calib_time = 0
         
-def show(sensor, calib_interval):
+def show(sensor, calib_interval=5):
     fig, ax = plt.subplots()
     plt.inferno()
     im = plt.imshow(sensor.getImage(), origin='lower')
@@ -99,15 +104,17 @@ def show(sensor, calib_interval):
     fig.colorbar(im, ax=ax)  # Show a colorbar
     fig.canvas.mpl_connect('key_press_event', lambda event: on_key_press(event, fig, im, sensor))
     
-    prev_calib = 0
+    global prev_calib_time
+    prev_calib_time = 0
     data = sensor.getImage()
     curr_clim = [np.min(data), np.max(data)]
     while True:
         try:
             data = sensor.getImage()
             im.set_data(data)
-            if time.time() - prev_calib > calib_interval:
-                prev_calib = time.time()
+            curr_time = auto_calibrate * time.time()
+            if prev_calib_time == 0 or curr_time - prev_calib_time > calib_interval:
+                prev_calib_time = time.time()
                 curr_clim = [np.min(data), np.max(data)]
                 im.set_clim(curr_clim[0], curr_clim[1])
                 print("Recalibrating")
@@ -124,9 +131,8 @@ def show(sensor, calib_interval):
 def main():
     matplotlib.use('Tkagg')
     # Setup the sensor
-    print((5-2) * 3 + 10)
     sensor = MLX90640(port=com_port, framerate=ir_framerate, pattern=pattern)
-    show(sensor, calib_interval=5)
+    show(sensor, calib_interval=calibration_interval)
     sensor.close()
     print("Done")
 
